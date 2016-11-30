@@ -6,10 +6,12 @@ import (
 	"regexp"
 	"strconv"
 	"runtime"
+	"os"
+	"time"
 )
 
 type(
-	ProcessCatcher	struct {
+	ProcessGroup        struct {
 		Name		string
 		OnDie		func()
 		Processes	[]Process
@@ -18,19 +20,9 @@ type(
 	Process struct{
 		ProcessName	string
 		PID		int
+		parent		*ProcessGroup
 	}
 )
-
-func (t * ProcessCatcher) Init(){
-	if runtime.GOOS == "windows" {
-		out := t.winTaskList()
-		elems, err := t.readProcessList(out)
-		GoPanic(err)
-		for _, item := range elems {
-			t.Processes = append(t.Processes, item)
-		}
-	}
-}
 
 func (t *Process) read(in string){
 	pattern := `([0-9]+)`
@@ -41,7 +33,56 @@ func (t *Process) read(in string){
 	t.PID = PID
 }
 
-func (t *ProcessCatcher) winTaskList() string {
+func (t * Process) intervalChecking(){
+	defer t.parent.deleteFromPool(t.PID)
+	for{
+		_, err := os.FindProcess(t.PID)
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		time.Sleep(time.Duration(setting.IntervalTime) * time.Millisecond)
+	}
+}
+
+func (t *ProcessGroup) Watch(){
+	for _, process := range t.Processes{
+		go process.intervalChecking()
+	}
+
+	go func(){
+		for len(t.Processes) != 0{
+			fmt.Println(len(t.Processes))
+		}
+		t.OnDie()
+	}()
+}
+
+func (t *ProcessGroup) Init(){
+	if runtime.GOOS == "windows" {
+		out := t.winTaskList()
+		elems, err := t.readProcessList(out)
+		GoPanic(err)
+		for _, item := range elems {
+			item.parent = t
+			t.Processes = append(t.Processes, item)
+		}
+	}
+}
+
+func (t * ProcessGroup) deleteFromPool(pid int) bool{
+	var i int
+	for i = 0; i < len(t.Processes); i++{
+		item := t.Processes[i]
+		if item.PID == pid {
+			t.Processes = append(t.Processes[:i], t.Processes[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (t *ProcessGroup) winTaskList() string {
 	exeParamProcess := fmt.Sprintf("imagename eq %s", t.Name)
 	command := exec.Command("tasklist", "-fi", exeParamProcess)
 	out, err := command.Output()
@@ -49,7 +90,7 @@ func (t *ProcessCatcher) winTaskList() string {
 	return string(out)
 }
 
-func (t *ProcessCatcher) readProcessList(out string) ([]Process, error){
+func (t *ProcessGroup) readProcessList(out string) ([]Process, error){
 	pattern := fmt.Sprintf(`%s([ ]+)([0-9]+)([ ]+)([A-Za-z]+)([ ]+)([0-9])([ ]+) ([0-9,]+) K`, t.Name)
 	exp := regexp.MustCompile(pattern)
 	items := exp.FindAllStringSubmatch(out, -1)

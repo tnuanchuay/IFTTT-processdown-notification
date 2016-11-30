@@ -8,7 +8,7 @@ import (
 )
 
 func TestWinTaskListCalling(t *testing.T){
-	p := ProcessCatcher{}
+	p := ProcessGroup{}
 	serviceName := "chrome.exe"
 	exec.Command(serviceName).Run()
 	p.Name = serviceName
@@ -25,7 +25,7 @@ func TestWinTaskListCalling(t *testing.T){
 }
 
 func TestWinTaskListReading(t *testing.T){
-	p := ProcessCatcher{}
+	p := ProcessGroup{}
 	serviceName := "chrome.exe"
 	exec.Command(serviceName).Run()
 	p.Name = serviceName
