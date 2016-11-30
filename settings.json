@@ -1,7 +1,7 @@
 {
   "ifttt-maker-key" : "",
   "processes" : [
-    "nginx"
+    "chrome.exe"
   ],
   "event" : [
 
