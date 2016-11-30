@@ -1,0 +1,9 @@
+{
+  "ifttt-maker-key" : "",
+  "processes" : [
+    "nginx"
+  ],
+  "event" : [
+
+  ]
+}
