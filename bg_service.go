@@ -1,6 +1,5 @@
 package main
 
-import "runtime"
 
 const (
 	RUNNING = "RUNNING"
@@ -21,7 +20,7 @@ type (
 	}
 )
 
-var ThreadPool ThreadPool
+var threadsPool ThreadPool
 
 func (j *Thread) New(serviceName string, eventTrigger []string) *Thread{
 	j.ServiceName = serviceName
@@ -31,16 +30,11 @@ func (j *Thread) New(serviceName string, eventTrigger []string) *Thread{
 }
 
 func (j *Thread) implementFunction(){
-	os := runtime.GOOS
-	for {
-		select{
-		case :
-		}
-	}
+
 }
 
 func (j *Thread) AddToThreadPool(){
-	ThreadPool.Threads = append(ThreadPool.Threads, j)
+	threadsPool.Threads = append(threadsPool.Threads, j)
 }
 
 func (j *Thread) Run(){
