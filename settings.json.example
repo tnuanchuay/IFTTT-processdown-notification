@@ -1,0 +1,15 @@
+{
+  "ifttt-maker-key" : "",
+  "ifttt-event" : [],
+  "interval-time" : 1000,
+  "processes-watcher" : [
+    {
+      "name":"putty.exe",
+      "event":["mail"]
+    },
+    {
+      "name":"nginx.exe",
+      "event":["facebook"]
+    }
+  ]
+}

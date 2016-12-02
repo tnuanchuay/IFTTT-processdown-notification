@@ -13,7 +13,6 @@ import (
 	"time"
 	"net/http"
 	"log"
-	"io/ioutil"
 )
 
 const(
@@ -140,14 +139,14 @@ func (t *ProcessWatcherGroup) Watch(){
 func (t *ProcessWatcherGroup) Die() {
 	for _, event := range t.Setting.Event{
 		url := fmt.Sprintf(BASEURL, event, setting.Key, t.Name)
-		resp, err := http.Get(url)
+		_, err := http.Get(url)
 		if err != nil {
 			log.Fatal(err)
 			return
 		}
-		data, _ := ioutil.ReadAll(resp.Body)
+		//data, _ := ioutil.ReadAll(resp.Body)
 
-		fmt.Println(string(data))
+		fmt.Println("call to", url)
 	}
 }
 
