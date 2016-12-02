@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"encoding/json"
+	"fmt"
 )
 
 type(
@@ -22,7 +23,10 @@ type(
 
 func (j *Settings) ReadSettings(filename string){
 	byteFile, err := ioutil.ReadFile(filename)
-	GoPanic(err)
+	if err != nil{
+		fmt.Println("Do you copy settings.json.env to settings.json?, if you don't, it's in src file")
+		GoPanic(err)
+	}
 
 	err = json.Unmarshal(byteFile, j)
 	GoPanic(err)
