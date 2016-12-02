@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"runtime"
+	"time"
 )
 
 const(
@@ -13,14 +14,15 @@ var setting Settings
 
 func main(){
 	setting.ReadSettings(FILENAME)
-	var pc_pool []ProcessGroup
+	setting.OS = runtime.GOOS
+	var pc_pool []ProcessWatcherGroup
 	for _, procName := range setting.Process{
-		pc := ProcessGroup{}
+		pc := ProcessWatcherGroup{}
 		pc.Name = procName
 		pc.Init()
 		pc.OnDie = func(){
-			fmt.Println("Chrome.exe was killed")
-			os.Exit(0)
+			fmt.Printf("%s was fully killed\n", pc.Name)
+			//os.Exit(0)
 		}
 		pc_pool = append(pc_pool, pc)
 	}
@@ -30,6 +32,6 @@ func main(){
 	}
 
 	for{
-
+		time.Sleep(10 * time.Second)
 	}
 }

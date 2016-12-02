@@ -1,3 +1,8 @@
+//[ProcessWatcherGroup]
+//	==>	[ProcessWatcher]	==>	go intervalChecker()	->	WatcherDeleteChannel
+//	==>	[ProcessWatcher]	==>	go intervalChecker()	->
+//	==>	WatcherDeleteChannel	-> find & delete()
+
 package main
 
 import (
@@ -5,26 +10,32 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"runtime"
-	"os"
 	"time"
 )
 
+const(
+	WINDOWS = "windows"
+)
+
 type(
-	ProcessGroup        struct {
-		Name		string
-		OnDie		func()
-		Processes	[]Process
+	ProcessWatcherGroup        struct {
+		Name                             string
+		OnDie                            func()
+		Processes                        []Watcher
+		WatcherDeleteChannel             chan int
+		ProcessWatcherGroupDeleteChannel chan bool
+		NewProcessListenerStatus	bool
+		DeleteWatcherHandlerStatus	bool
 	}
 
-	Process struct{
+	Watcher struct{
 		ProcessName	string
 		PID		int
-		parent		*ProcessGroup
+		parent		*ProcessWatcherGroup
 	}
 )
 
-func (t *Process) read(in string){
+func (t *Watcher) read(in string){
 	pattern := `([0-9]+)`
 	exp := regexp.MustCompile(pattern)
 	items := exp.FindAllString(in, -1)
@@ -33,44 +44,110 @@ func (t *Process) read(in string){
 	t.PID = PID
 }
 
-func (t * Process) intervalChecking(){
-	defer t.parent.deleteFromPool(t.PID)
+func  intervalChecking(pid int, procg *ProcessWatcherGroup){
+	defer fmt.Println("PID ", pid, " Killed")
 	for{
-		_, err := os.FindProcess(t.PID)
-		if err != nil {
-			fmt.Println(err)
-			break
+		fmt.Println("i am alive", pid)
+		isRunning := findProcess(pid, procg.Name)
+		if !isRunning {
+			procg.WatcherDeleteChannel <- pid
+			return
 		}
 		time.Sleep(time.Duration(setting.IntervalTime) * time.Millisecond)
 	}
 }
 
-func (t *ProcessGroup) Watch(){
-	for _, process := range t.Processes{
-		go process.intervalChecking()
-	}
-
-	go func(){
-		for len(t.Processes) != 0{
-			fmt.Println(len(t.Processes))
+func (t *ProcessWatcherGroup) ProcessAlreadyInCollector(pid int) bool{
+	for _, proc := range t.Processes{
+		if proc.PID == pid{
+			return true
 		}
-		t.OnDie()
-	}()
+	}
+	return false
 }
 
-func (t *ProcessGroup) Init(){
-	if runtime.GOOS == "windows" {
+func NewProcessListener(t *ProcessWatcherGroup){
+	defer fmt.Println("NewProcessListener Killed")
+	defer func(){
+		t.NewProcessListenerStatus = false
+	}()
+
+	for{
+		process := t.readProcessList(t.winTaskList())
+		if len(t.Processes) < len(process){
+			for _, proc := range process{
+				if !t.ProcessAlreadyInCollector(proc.PID){
+					t.Processes = append(t.Processes, proc)
+					go intervalChecking(proc.PID, t)
+					break
+				}
+			}
+
+			if t.DeleteWatcherHandlerStatus == false{
+				t.DeleteWatcherHandlerStatus = true
+				go DeleteWatcherHandler(t)
+			}
+			fmt.Println("new process created")
+		}
+
+		time.Sleep(time.Duration(setting.IntervalTime) * time.Millisecond)
+	}
+}
+
+func DeleteWatcherHandler(t *ProcessWatcherGroup){
+	defer fmt.Println("DeleteProcessHandler Killed")
+	defer func(){
+		t.DeleteWatcherHandlerStatus = false
+	}()
+
+	for {
+		if len(t.Processes) == 0 {
+			t.OnDie()
+			return
+		}
+		select {
+		case PID := <- t.WatcherDeleteChannel:
+			t.deleteFromPool(PID)
+			if len(t.Processes) == 0{
+				t.OnDie()
+				return
+			}
+		}
+		time.Sleep(time.Duration(setting.IntervalTime) * time.Millisecond)
+	}
+}
+
+func (t *ProcessWatcherGroup) Watch(){
+
+	for _, process := range t.Processes{
+		go intervalChecking(process.PID, t)
+	}
+
+	//ProcessWatcherGroup thread looking for new process created
+	t.NewProcessListenerStatus = true
+	go NewProcessListener(t)
+
+
+	//ProcessWatcherGroup thread waiting for someone killed then kill the his watcher
+	t.DeleteWatcherHandlerStatus = true
+	go DeleteWatcherHandler(t)
+}
+
+func (t *ProcessWatcherGroup) Init(){
+	if setting.OS == WINDOWS {
 		out := t.winTaskList()
-		elems, err := t.readProcessList(out)
-		GoPanic(err)
+		elems := t.readProcessList(out)
 		for _, item := range elems {
 			item.parent = t
 			t.Processes = append(t.Processes, item)
 		}
+
 	}
+
+	t.WatcherDeleteChannel = make(chan int)
 }
 
-func (t * ProcessGroup) deleteFromPool(pid int) bool{
+func (t *ProcessWatcherGroup) deleteFromPool(pid int) bool{
 	var i int
 	for i = 0; i < len(t.Processes); i++{
 		item := t.Processes[i]
@@ -82,7 +159,7 @@ func (t * ProcessGroup) deleteFromPool(pid int) bool{
 	return false
 }
 
-func (t *ProcessGroup) winTaskList() string {
+func (t *ProcessWatcherGroup) winTaskList() string {
 	exeParamProcess := fmt.Sprintf("imagename eq %s", t.Name)
 	command := exec.Command("tasklist", "-fi", exeParamProcess)
 	out, err := command.Output()
@@ -90,17 +167,30 @@ func (t *ProcessGroup) winTaskList() string {
 	return string(out)
 }
 
-func (t *ProcessGroup) readProcessList(out string) ([]Process, error){
+func (t *ProcessWatcherGroup) readProcessList(out string) []Watcher {
 	pattern := fmt.Sprintf(`%s([ ]+)([0-9]+)([ ]+)([A-Za-z]+)([ ]+)([0-9])([ ]+) ([0-9,]+) K`, t.Name)
 	exp := regexp.MustCompile(pattern)
 	items := exp.FindAllStringSubmatch(out, -1)
-	var processes []Process
+	var processes []Watcher
 	for _, item := range items{
-		var process Process
+		var process Watcher
 		process.read(item[0])
 		processes = append(processes, process)
 	}
-	return processes, nil
+	return processes
+}
+
+func findProcess(pid int, processName string) bool{
+	if setting.OS == WINDOWS{
+		procg := ProcessWatcherGroup{Name:processName}
+		procs := procg.readProcessList(procg.winTaskList())
+		for _, proc := range procs{
+			if proc.PID == pid {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 

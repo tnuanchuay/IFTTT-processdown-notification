@@ -11,6 +11,7 @@ type(
 		Key		string		`json:"ifttt-maker-key"`
 		Event		[]string	`json:"event"`
 		IntervalTime	int		`json:"interval-time"`
+		OS		string
 	}
 )
 

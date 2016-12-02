@@ -2,7 +2,7 @@
   "ifttt-maker-key" : "",
   "interval-time" : 1000,
   "processes" : [
-    "chrome.exe"
+    "putty.exe"
   ],
   "event" : [
 
