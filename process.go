@@ -11,6 +11,9 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"net/http"
+	"log"
+	"io/ioutil"
 )
 
 const(
@@ -20,12 +23,12 @@ const(
 type(
 	ProcessWatcherGroup        struct {
 		Name                             string
-		OnDie                            func()
 		Processes                        []Watcher
 		WatcherDeleteChannel             chan int
 		ProcessWatcherGroupDeleteChannel chan bool
 		NewProcessListenerStatus	bool
 		DeleteWatcherHandlerStatus	bool
+		Setting				ProcessSetting
 	}
 
 	Watcher struct{
@@ -47,7 +50,7 @@ func (t *Watcher) read(in string){
 func  intervalChecking(pid int, procg *ProcessWatcherGroup){
 	defer fmt.Println("PID ", pid, " Killed")
 	for{
-		fmt.Println("i am alive", pid)
+		fmt.Println("i am alive", pid, procg.Name)
 		isRunning := findProcess(pid, procg.Name)
 		if !isRunning {
 			procg.WatcherDeleteChannel <- pid
@@ -67,13 +70,15 @@ func (t *ProcessWatcherGroup) ProcessAlreadyInCollector(pid int) bool{
 }
 
 func NewProcessListener(t *ProcessWatcherGroup){
-	defer fmt.Println("NewProcessListener Killed")
+	defer fmt.Println(t.Name, "NewProcessListener Killed")
 	defer func(){
 		t.NewProcessListenerStatus = false
 	}()
 
 	for{
+
 		process := t.readProcessList(t.winTaskList())
+
 		if len(t.Processes) < len(process){
 			for _, proc := range process{
 				if !t.ProcessAlreadyInCollector(proc.PID){
@@ -95,21 +100,21 @@ func NewProcessListener(t *ProcessWatcherGroup){
 }
 
 func DeleteWatcherHandler(t *ProcessWatcherGroup){
-	defer fmt.Println("DeleteProcessHandler Killed")
+	defer fmt.Println(t.Name, " DeleteProcessHandler Killed")
 	defer func(){
 		t.DeleteWatcherHandlerStatus = false
 	}()
 
 	for {
 		if len(t.Processes) == 0 {
-			t.OnDie()
+			t.Die()
 			return
 		}
 		select {
 		case PID := <- t.WatcherDeleteChannel:
 			t.deleteFromPool(PID)
 			if len(t.Processes) == 0{
-				t.OnDie()
+				t.Die()
 				return
 			}
 		}
@@ -127,10 +132,23 @@ func (t *ProcessWatcherGroup) Watch(){
 	t.NewProcessListenerStatus = true
 	go NewProcessListener(t)
 
-
 	//ProcessWatcherGroup thread waiting for someone killed then kill the his watcher
 	t.DeleteWatcherHandlerStatus = true
 	go DeleteWatcherHandler(t)
+}
+
+func (t *ProcessWatcherGroup) Die() {
+	for _, event := range t.Setting.Event{
+		url := fmt.Sprintf(BASEURL, event, setting.Key, t.Name)
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		data, _ := ioutil.ReadAll(resp.Body)
+
+		fmt.Println(string(data))
+	}
 }
 
 func (t *ProcessWatcherGroup) Init(){
@@ -141,7 +159,6 @@ func (t *ProcessWatcherGroup) Init(){
 			item.parent = t
 			t.Processes = append(t.Processes, item)
 		}
-
 	}
 
 	t.WatcherDeleteChannel = make(chan int)
