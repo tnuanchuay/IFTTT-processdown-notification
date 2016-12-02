@@ -29,3 +29,6 @@ Notify when your important process is down via IFTTT with many services such as 
   ]
 }
 ````
+
+### TODO
+- Work on Linux
