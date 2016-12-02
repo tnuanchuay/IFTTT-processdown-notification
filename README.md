@@ -1,5 +1,5 @@
 # IFTTT-processdown-notification
-Notify when your important process is down via IFTTT with many services.
+Notify when your important process is down via IFTTT with many services such as SMS, Gmail, Facebook etc.
 ### Require
 - Golang
 
