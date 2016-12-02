@@ -7,11 +7,16 @@ import (
 
 type(
 	Settings struct {
-		Process		[]string	`json:"processes"`
-		Key		string		`json:"ifttt-maker-key"`
-		Event		[]string	`json:"event"`
-		IntervalTime	int		`json:"interval-time"`
+		Process		[]ProcessSetting	`json:"processes-watcher"`
+		Key		string			`json:"ifttt-maker-key"`
+		Event		[]string		`json:"event"`
+		IntervalTime	int			`json:"interval-time"`
 		OS		string
+	}
+
+	ProcessSetting struct{
+		Name		string			`json:"name"`
+		Event		[]string		`json:"event"`
 	}
 )
 
